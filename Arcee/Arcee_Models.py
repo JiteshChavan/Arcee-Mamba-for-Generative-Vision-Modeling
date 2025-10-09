@@ -1374,7 +1374,7 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
         
         residual = None
         debug_h0 = None
-        beta = 0.7
+        #beta = 0.7
         assert initial_state is None
         for idx, block in enumerate(self.blocks):
             x, residual, last_state = block (x, residual, initial_state=initial_state, return_last_state=True if self.ssm_cfg == "Arcee" else False, y=c)
@@ -1387,7 +1387,9 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
             if initial_state is None:
                 initial_state = last_state
             else:
-                initial_state = initial_state + beta * (last_state - initial_state)
+                #initial_state = initial_state + beta * (last_state - initial_state)
+                #initial_state = initial_state + last_state
+                initial_state = last_state
 
 
             if self.use_attn_every_k_layers > 0 and (idx + 1) % self.use_attn_every_k_layers == 0:
