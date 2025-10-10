@@ -1395,12 +1395,15 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                 #initial_state = initial_state + beta * (last_state - initial_state)
                 #initial_state = initial_state + last_state
                 initial_state = last_state
-            try:
-                if wandb.run is not None and initial_state is not None:
-                    # only log some layers (e.g., 0 and last)
-                    wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
-            except Exception:
-                pass
+            
+            if initial_state is not None and self.ssm_cfg == "Arcee":
+                try:
+                    if wandb.run is not None and initial_state is not None:
+                        # only log some layers (e.g., 0 and last)
+                        wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
+                except Exception:
+                    raise NotImplementedError(f"cant log last_state norm after block pass")
+                    pass
 
 
             if self.use_attn_every_k_layers > 0 and (idx + 1) % self.use_attn_every_k_layers == 0:

@@ -89,7 +89,7 @@ if __name__ == "__main__":
         "--scan-type",
         type=str,
         default="none",
-        choices=["none", "Arcee_1", "Arcee_8", "Zigma_8"],
+        choices=["none", "Arcee_1", "Arcee_8", "Zigma_8", "Zigma_1"],
     )
 
     # MOE Arguments
