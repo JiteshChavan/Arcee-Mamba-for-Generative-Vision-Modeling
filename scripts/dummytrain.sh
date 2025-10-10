@@ -1,9 +1,9 @@
-torchrun --standalone --nproc_per_node=1 ../Arcee/dummytrain.py --exp ReplaceArcee8-448-256 --datadir ../data/celeba256/lmdb_new --dataset celeba_256 --eval-refdir ../data/celeba256/real_samples \
+torchrun --standalone --nproc_per_node=1 ../Arcee/dummytrain.py --exp ReplaceArcee_1NoStateweaver --datadir ../data/celeba256/lmdb_new --dataset celeba_256 --eval-refdir ../data/celeba256/real_samples \
   --image-size 256 \
   --num-classes 1 \
   --block-type normal \
   --model Arcee-XS/2 \
-  --scan-type Arcee_8 \
+  --scan-type Arcee_1 \
   --ssm-dstate 256 \
   --train-steps 5000 \
   --eval-every 40001 \

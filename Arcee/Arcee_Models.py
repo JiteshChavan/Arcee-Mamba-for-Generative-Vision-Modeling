@@ -1,6 +1,8 @@
 import math
 from functools import partial
 from typing import Optional
+import wandb
+
 
 from huggingface_hub import PyTorchModelHubMixin
 
@@ -30,6 +32,8 @@ from scanning_orders import SCAN_ZOO, local_reverse, local_scan, reverse_permut_
 from switch_mlp import SwitchMLP
 
 from wavelet_layer import DWT_2D, IDWT_2D
+
+
 
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
@@ -1269,9 +1273,9 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
         else:
             self.norm_f = None
         
-        
-        if ssm_cfg == "Arcee":
-            self.last_state_weaver = LastStateWeaver(hidden_size, self.blocks[0].mixer.d_inner, ssm_dstate)
+        # NOTE: Removed state weaver
+        #if ssm_cfg == "Arcee":
+        #    self.last_state_weaver = LastStateWeaver(hidden_size, self.blocks[0].mixer.d_inner, ssm_dstate)
 
         self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
         self.initialize_weights()
@@ -1312,9 +1316,10 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-        if self.ssm_cfg == "Arcee":
-            nn.init.constant_(self.last_state_weaver.adaLN_modulation[-1].weight, 0)
-            nn.init.constant_(self.last_state_weaver.adaLN_modulation[-1].bias, 0)
+        # NOTE: removed last_state weaver
+        #if self.ssm_cfg == "Arcee":
+        #    nn.init.constant_(self.last_state_weaver.adaLN_modulation[-1].weight, 0)
+        #    nn.init.constant_(self.last_state_weaver.adaLN_modulation[-1].bias, 0)
 
         # Mamba init
         n_residuals = self.count_residuals()
@@ -1390,6 +1395,12 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                 #initial_state = initial_state + beta * (last_state - initial_state)
                 #initial_state = initial_state + last_state
                 initial_state = last_state
+            try:
+                if wandb.run is not None and initial_state is not None:
+                    # only log some layers (e.g., 0 and last)
+                    wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
+            except Exception:
+                pass
 
 
             if self.use_attn_every_k_layers > 0 and (idx + 1) % self.use_attn_every_k_layers == 0:
@@ -1423,8 +1434,9 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                     residual_in_fp32=residual,
                     eps=self.norm_f.eps,
                 )
-        if self.ssm_cfg == "Arcee":
-            x = self.last_state_weaver(x, last_state)
+        # NOTE: removed state weaver
+        #if self.ssm_cfg == "Arcee":
+        #    x = self.last_state_weaver(x, last_state)
 
         x = self.final_layer(x, c) # (B, T, patch_size*patch_size * outchannels) outchannels = 4 for vae latent space
         x = self.unpatchify(x) # (B, out_channels, H, W)
