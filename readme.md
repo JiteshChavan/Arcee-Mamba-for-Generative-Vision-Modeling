@@ -1,4 +1,4 @@
-### setup ffhq1024 datase
+### setup ffhq1024 database
 - cd data_prep/ffhq1024
 - bash download.sh
 - python convert.py
