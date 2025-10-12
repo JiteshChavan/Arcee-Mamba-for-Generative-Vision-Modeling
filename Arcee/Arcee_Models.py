@@ -1036,7 +1036,7 @@ def create_block(
     Creates a block with specified mixer every even layer, and MoE ffn every odd layer
     """
     assert ssm_cfg in ["Arcee", "Zigma", "NotArcee"]
-    assert scan_type in ["arcee_1", "zigma_1", "arcee_8", "zigma_8"]
+    assert scan_type in ["arcee_1", "zigma_1", "arcee_4", "zigma_4", "arcee_8", "zigma_8"]
     factory_kwargs = {"device": device, "dtype": dtype}
     norm_cls = partial (nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_eps, **factory_kwargs)
     
@@ -1209,20 +1209,23 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
         scan_type = scan_type.lower()
         self.scan_type = scan_type
         if scan_type.startswith("arcee") or scan_type.startswith("zigma"):
-                block_kwargs = gen_paths(grid_size, scan_type)
-                if scan_type == "arcee_1":
-                    self.lock_permutations = True
-                    self.single_path = {}
-                    self.register_buffer("locked_permutation_path", block_kwargs["zigzag_paths"])
-                    self.register_buffer("locked_permutation_path_r", block_kwargs["zigzag_paths_reverse"])
-                    # TODO: remove redundant asserts
-                    assert self.locked_permutation_path.shape[0] == 1
-                    assert self.locked_permutation_path.shape[1] == int (grid_size * grid_size)
-                    assert self.locked_permutation_path_r.shape[0] == 1
-                    assert self.locked_permutation_path_r.shape[1] == int (grid_size * grid_size)
-                    
+            block_kwargs = gen_paths(grid_size, scan_type)
+            if scan_type == "arcee_1":
+                self.lock_permutations = True
+                self.single_path = {}
+                self.register_buffer("locked_permutation_path", block_kwargs["zigzag_paths"])
+                self.register_buffer("locked_permutation_path_r", block_kwargs["zigzag_paths_reverse"])
+                # TODO: remove redundant asserts
+                assert self.locked_permutation_path.shape[0] == 1
+                assert self.locked_permutation_path.shape[1] == int (grid_size * grid_size)
+                assert self.locked_permutation_path_r.shape[0] == 1
+                assert self.locked_permutation_path_r.shape[1] == int (grid_size * grid_size)
         else:
             block_kwargs = {}
+
+        if block_kwargs:
+            print (f"Forward permutation count : {block_kwargs['zigzag_paths'].shape[0]}")
+            print (f"Reverse permutation count : {block_kwargs['zigzag_paths_reverse'].shape[0]}")
         print(f"\n\tRegistered scan_type {scan_type}")
         print (f"\tPermutations locked:{self.lock_permutations}")
         
@@ -1396,14 +1399,15 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                 #initial_state = initial_state + last_state
                 initial_state = last_state
             
-            if initial_state is not None and self.ssm_cfg == "Arcee":
-                try:
-                    if wandb.run is not None and initial_state is not None:
-                        # only log some layers (e.g., 0 and last)
-                        wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
-                except Exception:
-                    raise NotImplementedError(f"cant log last_state norm after block pass")
-                    pass
+            # NOTE: not logging activations, slows down training
+            #if initial_state is not None and self.ssm_cfg == "Arcee":
+            #    try:
+            #        if wandb.run is not None and initial_state is not None:
+            #            # only log some layers (e.g., 0 and last)
+            #            wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
+            #    except Exception:
+            #        raise NotImplementedError(f"cant log last_state norm after block pass")
+                    
 
 
             if self.use_attn_every_k_layers > 0 and (idx + 1) % self.use_attn_every_k_layers == 0:

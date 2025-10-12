@@ -652,7 +652,7 @@ if __name__ == "__main__":
         "--scan-type",
         type=str,
         default="none",
-        choices=["none", "Arcee_1", "Arcee_8", "Zigma_1", "Zigma_8"],
+        choices=["none", "Arcee_1", "Arcee_4", "Arcee_8", "Zigma_1", "Zigma_4", "Zigma_8"],
     )
     parser.add_argument("--block-type", type=str, default="normal", choices=["normal", "combined"])
 
