@@ -1,3 +1,14 @@
+### Starting experiments
+- git pull origin debug
+- cd data_prep/celeba256
+- python download.py
+- once the download is finish create lmdb for traning as follows: python convert.py
+- after the script finishes : cd ../../scripts and run the two experiments
+- Arcee2-b2-celeba256.sh
+- Zigma2-b2-celeba256.sh
+- make sure to change visible devices to the script, it looks like this assuming 2 gpus per experiment
+![](./assets/devices.png)
+
 ### Create env. with python 3.10.8
 - proceed with following within the environment
 - install cuda toolkit 12.8 as : conda install nvidia/label/cuda-12.8.0::cuda-toolkit
