@@ -3,7 +3,7 @@ torchrun --standalone --nproc_per_node=1 ../Arcee/train.py --exp 4test --datadir
   --num-classes 1 \
   --block-type normal \
   --model Zigma-XS/2 \
-  --scan-type Zigma_4 \
+  --scan-type Zigma_2 \
   --ssm-dstate 256 \
   --train-steps 5000 \
   --eval-every 40001 \

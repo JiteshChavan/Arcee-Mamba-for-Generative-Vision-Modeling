@@ -24,6 +24,7 @@ torch.backends.cudnn.allow_tf32 = True
 import numpy as np
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+import contextlib
 
 # VAE
 from diffusers.models import AutoencoderKL
@@ -291,18 +292,14 @@ def main(args):
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
 
-    # Variables for monitoring/logging purposes:
-    log_steps = 0
-    running_loss = 0
-    running_grad_norm = 0.0
-    start_time = time()
+    
 
     assert args.num_classes >= 1
     use_label = args.num_classes > 1
     use_cfg = args.cfg_scale > 1.0 and use_label
     # sample noise and label
     sample_bs = args.sample_bs
-    zs = torch.randn(sample_bs, 4, latent_size, latent_size, device=device)
+    zs = torch.randn(sample_bs * args.grad_accum_steps, 4, latent_size, latent_size, device=device)
     if use_label:
         ys = torch.randint(args.num_classes - 1, size =(sample_bs, ), device = device, dtype=torch.long) # sample label [0, num_classes-1) index num_classes-1 is null label
         if use_cfg:
@@ -335,8 +332,7 @@ def main(args):
     total_steps = args.train_steps
     current_step = init_step
     epoch = init_epoch
-    effective_batch_size = args.global_batch_size
-    steps_per_epoch = math.ceil(len(dataset) / effective_batch_size)
+    steps_per_epoch = math.ceil(len(dataset) / args.global_batch_size * args.grad_accum_steps)
     sampler.set_epoch(epoch)
     data_iter = iter(loader)
     def next_batch():
@@ -357,32 +353,50 @@ def main(args):
     if dist.get_rank() == 0:
         pbar = tqdm(total=total_steps - init_step, ncols=100, disable=True)
         pbar.set_description(f"epoch: {epoch}")
+    
+    # Variables for monitoring/logging purposes:
+    log_steps = 0
+    running_loss = 0
+    running_grad_norm = 0.0
+    start_time = time()
 
+    effective_batch_size = args.global_batch_size # thats per single grad accum step
+    grad_accum_steps = args.grad_accum_steps
     for current_step in range(init_step, total_steps):
-        x, y = next_batch()
-        # adjust_learning_rate(opt, i / len(loader) + epoch, args)
-        x = x.to(device)
-        y = None if not use_label else y.to(device)
-        if not use_latent:
-            with torch.no_grad():
-                # Map input images to latent space + normalize latents:
-                x = vae.encode(x).latent_dist.sample().mul_(0.18215)
-        model_kwargs = dict(y=y)
-        before_forward = torch.cuda.memory_allocated(device)
-        loss_dict = transport.training_losses(model, x, model_kwargs)
-        loss = loss_dict["loss"].mean()
-        after_forward = torch.cuda.memory_allocated(device)
-        opt.zero_grad()
-        loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+        opt.zero_grad(set_to_none=True)
 
+        micro_step_loss_accum = 0.0
+        for micro_step in range(grad_accum_steps):
+            x, y = next_batch()
+            # adjust_learning_rate(opt, i / len(loader) + epoch, args)
+            x = x.to(device)
+            y = None if not use_label else y.to(device)
+            if not use_latent:
+                with torch.no_grad():
+                    # Map input images to latent space + normalize latents:
+                    x = vae.encode(x).latent_dist.sample().mul_(0.18215)
+            model_kwargs = dict(y=y)
+
+            before_forward = torch.cuda.memory_allocated(device)
+            grad_sync_ctx = model.no_sync() if micro_step < (grad_accum_steps - 1) else contextlib.nullcontext()
+            with grad_sync_ctx:
+                loss_dict = transport.training_losses(model, x, model_kwargs)
+                loss = loss_dict["loss"].mean()
+                # addition of gradients corresponds to SUM in objective, but we want MEAN hence adjust with the normalizing factor
+                loss = loss / grad_accum_steps
+                micro_step_loss_accum += loss.item()
+                after_forward = torch.cuda.memory_allocated(device)
+                loss.backward()
+            
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
         opt.step()
         after_backward = torch.cuda.memory_allocated(device)
         update_ema(ema, model.module)
-        
+
 
         # Log loss values:
-        running_loss += loss.item()
+        #running_loss += loss.item()
+        running_loss += micro_step_loss_accum
         running_grad_norm += grad_norm.item()
         log_steps += 1
         
@@ -469,19 +483,23 @@ def main(args):
 
         if rank == 0 and current_step % args.plot_every == 0:
             logger.info(f"Generating base model samples...")
+            render_list = []
             model.eval()
             with torch.no_grad():
-                #zs = torch.randn(sample_bs, 4, latent_size, latent_size, device=device)
                 sample_fn = transport_sampler.sample_ode()  # default to ode sampling
-                samples = sample_fn(zs, model_fn, **sample_model_kwargs)[-1]
-                #samples_ema = sample_fn(zs, ema_fn, **sample_model_kwargs)[-1]
-                
-                if use_cfg:  # remove null samples
-                    samples, _ = samples.chunk(2, dim=0)
-                    #samples_ema, _ = samples_ema.chunk(2, dim=0)
-                #samples = torch.cat((samples,samples_ema), dim=0)
-                samples = vae.decode(samples / 0.18215).sample
-
+                for sample_step in range(args.grad_accum_steps):
+                    prior_samples = zs[sample_step * sample_bs: (sample_step + 1 ) * sample_bs] # 0 1 2 3 4
+                    #zs = torch.randn(sample_bs, 4, latent_size, latent_size, device=device)
+                    samples = sample_fn(prior_samples, model_fn, **sample_model_kwargs)[-1]
+                    #samples_ema = sample_fn(zs, ema_fn, **sample_model_kwargs)[-1]
+                    if use_cfg:  # remove null samples
+                        samples, _ = samples.chunk(2, dim=0)
+                        #samples_ema, _ = samples_ema.chunk(2, dim=0)
+                    #samples = torch.cat((samples,samples_ema), dim=0)
+                    samples = vae.decode(samples / 0.18215).sample
+                    render_list.append(samples.cpu())
+                    del samples
+            samples = torch.cat(render_list, dim=0)
             # Save and display images:
             save_image(samples, f"{sample_dir}/image_{current_step:07d}.jpg", nrow=16, normalize=True, value_range=(-1, 1))
             wandb.log({"samples": wandb.Image(f"{sample_dir}/image_{current_step:07d}.jpg")}, step=current_step, commit= not will_log_fid)
@@ -698,6 +716,8 @@ if __name__ == "__main__":
 
     
     # NOTE: training dynamics
+    parser.add_argument("--global-batch-size", type=int, default=2)
+    parser.add_argument("--grad-accum-steps", type=int, default=2)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--train-steps", type=int, default=50000)
     parser.add_argument("--no-lr-decay", action="store_true", default=False) 
@@ -715,7 +735,6 @@ if __name__ == "__main__":
     group.add_argument("--eval-bs", type=int, default=4) # NOTE: eval batch size for fid calc (per GPU)
     group.add_argument("--eval-every", type=int, default=9999)
     group.add_argument("--eval-refdir", type=str, default=None)
-    parser.add_argument("--global-batch-size", type=int, default=2)
     
 
     # Flow Matching 

@@ -1036,7 +1036,7 @@ def create_block(
     Creates a block with specified mixer every even layer, and MoE ffn every odd layer
     """
     assert ssm_cfg in ["Arcee", "Zigma", "NotArcee"]
-    assert scan_type in ["arcee_1", "zigma_1", "arcee_4", "zigma_4", "arcee_8", "zigma_8"]
+    assert scan_type in ["arcee_1", "zigma_1", "arcee_2", "zigma_2", "arcee_4", "zigma_4", "arcee_8", "zigma_8"]
     factory_kwargs = {"device": device, "dtype": dtype}
     norm_cls = partial (nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_eps, **factory_kwargs)
     
