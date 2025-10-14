@@ -30,9 +30,9 @@ fi
 # 48 GB, H100 is 80GB supports 96 batchsize, lets set per gpu batch size = 48 to be safe
 
 NUM_GPUS=2
-BATCH_SIZE=48
-EVAL_BS=32
-GRAD_ACCUM_STEPS=2
+BATCH_SIZE=24
+EVAL_BS=24
+GRAD_ACCUM_STEPS=4
 GLOBAL_BATCH_SIZE=$((BATCH_SIZE * NUM_GPUS))
 
 torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train_grad_acc.py --exp $EXP --datadir ../data_prep/celeba256/ --dataset celeba_256 --eval-refdir ../data_prep/celeba256/real_samples \
