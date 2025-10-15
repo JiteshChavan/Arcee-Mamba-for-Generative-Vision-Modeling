@@ -175,6 +175,7 @@ def main(args):
             mode = "disabled"
         wandb.init(
             project="Arcee",
+            entity="red-blue-violet",
             config=vars(args),
             name=experiment_index,
             mode=mode,
