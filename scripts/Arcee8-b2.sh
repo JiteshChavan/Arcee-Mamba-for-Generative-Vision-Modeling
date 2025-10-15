@@ -5,7 +5,7 @@ export CUDA_VISIBLE_DEVICES=0,1
 # rm -rf run_state/$EXP
 # rm -rf results/"$EXP"/
 # comment out --resume flag
-EXP="Arcee-8-B-2-celeba256"
+EXP="Arcee8-B-2-celeba256"
 STATE_DIR="run_state/${EXP}"
 RUN_ID_FILE="${STATE_DIR}/wandb_run_id.txt"
 mkdir -p "${STATE_DIR}"

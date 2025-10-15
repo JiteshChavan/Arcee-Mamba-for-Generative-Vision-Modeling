@@ -5,7 +5,7 @@ export CUDA_VISIBLE_DEVICES=2,4
 # rm -rf run_state/$EXP
 # rm -rf results/"$EXP"/
 # comment out --resume flag
-EXP="Zigma-4-B2-256-celeba256"
+EXP="Zigma4-B2-celeba256"
 STATE_DIR="run_state/${EXP}"
 RUN_ID_FILE="${STATE_DIR}/wandb_run_id.txt"
 mkdir -p "${STATE_DIR}"

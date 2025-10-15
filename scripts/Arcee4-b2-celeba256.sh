@@ -2,11 +2,12 @@ export WANDB_API_KEY='2f92f218fe46708930c460c6f57055ac6ce1361c'
 export CUDA_VISIBLE_DEVICES=6,7
 
 
+
 # to start a brand new run 
 # rm -rf run_state/$EXP
 # rm -rf results/"$EXP"/
 # comment out --resume flag
-EXP="Arcee-4-B2-celeba256"
+EXP="Arcee4-B2-celeba256"
 STATE_DIR="run_state/${EXP}"
 RUN_ID_FILE="${STATE_DIR}/wandb_run_id.txt"
 mkdir -p "${STATE_DIR}"
