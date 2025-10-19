@@ -266,22 +266,6 @@ def main(args):
 
         for g in opt.param_groups:
             g["lr"] = args.lr
-
-
-        if "rng_state" in checkpoint:
-            try:
-                random.setstate(checkpoint["rng_state"]["python"])
-                np.random.set_state(checkpoint["rng_state"]["numpy"])
-                
-                torch.set_rng_state(checkpoint["rng_state"]["torch"])
-                cuda_states = checkpoint["rng_state"]["cuda"]
-                if isinstance(cuda_states, (list, tuple)):
-                    torch.cuda.set_rng_state(cuda_states[device], device=device)
-                else:
-                    torch.cuda.set_rng_state(cuda_states, device=device)
-            except Exception as e:
-                if rank == 0:
-                    logger.warning(f"Could not fully restore RNG state: {e}")
         
         logger.info("=> resume checkpoint (epoch {})".format(checkpoint["epoch"]))
     else:
@@ -511,12 +495,6 @@ def main(args):
                         "micro_idx_in_epoch": int(micro_idx_in_epoch),  # how many micro-batches already consumed this epoch
                     },
 
-                    "rng_state": {
-                        "python": random.getstate(),
-                        "numpy": np.random.get_state(),
-                        "torch": torch.get_rng_state(),
-                        "cuda": torch.cuda.get_rng_state_all(),
-                    },
                 }
                 torch.save(content, os.path.join(checkpoint_dir, "content.pth"))
 
@@ -679,25 +657,6 @@ def main(args):
 
     model.eval()  # important! This disables randomized embedding dropout
     # do any sampling/FID calculation/etc. with ema (or model) in eval mode ...
-    if rank == 0:
-        logger.info(f"Generating base model samples...")
-        with torch.no_grad():
-            #zs = torch.randn(sample_bs, 4, latent_size, latent_size, device=device)
-            sample_fn = transport_sampler.sample_ode()  # default to ode sampling
-            samples = sample_fn(zs, model_fn, **sample_model_kwargs)[-1]
-            #samples_ema = sample_fn(zs, ema_fn, **sample_model_kwargs)[-1]
-            
-            if use_cfg:  # remove null samples
-                samples, _ = samples.chunk(2, dim=0)
-                #samples_ema, _ = samples_ema.chunk(2, dim=0)
-            #samples = torch.cat((samples,samples_ema), dim=0)
-            samples = vae.decode(samples / 0.18215).sample
-
-        # Save and display images:
-        save_image(samples, f"{sample_dir}/image_FINAL_SAMPLE.jpg", nrow=16, normalize=True, value_range=(-1, 1))
-        wandb.log({"samples": wandb.Image(f"{sample_dir}/image_FINAL_SAMPLE.jpg")}, step=total_steps+500, commit= True)
-        del samples
-        model.train()
     
     logger.info("Done!")
     if pbar is not None:
