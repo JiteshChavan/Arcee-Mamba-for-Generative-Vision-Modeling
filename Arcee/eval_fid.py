@@ -1,3 +1,7 @@
+import cleanfid
+from cleanfid import fid
+
+import os
 import shutil
 import random
 import gc
@@ -84,18 +88,26 @@ def get_step_from_ckpt_path(ckpt_path):
 
     
 def main(args):
+    """
+    Evaluates FID for all checkpoints for given experiment.
+    Computes stats for reference split once and deposits the npz file in the specified datadir.
+    """
     assert torch.cuda.is_available(), "Eval currently requires at least one GPU."
     dist.init_process_group("nccl")
     rank = dist.get_rank()
     device = rank % torch.cuda.device_count()
+    device_str = f"cuda:{device}"
     world_size = dist.get_world_size()
     seed = args.global_seed * world_size + rank
     torch.manual_seed(seed)
     torch.cuda.set_device(device)
     print(f"Starting rank={rank}, seed={seed}, world_size={world_size}.")
 
+    np.random.seed(seed)
+    random.seed(seed)
+
     # setup directory for eval
-    exp_path = f"results/{args.exp}" # target for fid eval
+    exp_path = f"results/{args.exp}" # target checkpoints for fid eval
     assert os.path.exists(exp_path), f"target experiment directory doesnt exist : {exp_path} is invalid"
     checkpoint_directory = f"{exp_path}/checkpoints"
     checkpoints = list_checkpoints(checkpoint_directory)
@@ -103,11 +115,11 @@ def main(args):
 
 
     eval_index = args.exp # directory to save eval_results
-    eval_dir = f"{args.results_dir}/{eval_index}"
-    sample_dir = f"{args.results_dir}/samples"
+    eval_dir = f"{args.eval_results_dir}/{eval_index}"
+    sample_dir = f"{args.eval_results_dir}/samples"
     
     if rank == 0:
-        os.makedirs(args.results_dir, exist_ok=True)
+        os.makedirs(args.eval_results_dir, exist_ok=True)
         os.makedirs(eval_dir, exist_ok=True)
         os.makedirs(sample_dir, exist_ok=True)
 
@@ -124,7 +136,41 @@ def main(args):
     else:
         logger = create_logger(None)
     dist.barrier()
+
+    stats_name = args.dataset # celeba_256 eg.
+    if rank == 0:
+        # store real stats in the same directory as data, one single time
+        assert os.path.exists(args.datadir)
+        # check if real_stats file exists or not: id like to keep it ias real_stats_dir/real_stats.npz
+        real_stats_path = os.path.join(args.datadir, "real_stats.npz")
+        if not os.path.exists(real_stats_path):
+            assert os.path.exists(args.eval_refdir), f"--eval-refdir doesnt exist"
+
+            # compute real stats, if they dont exist in CleanFID's cache
+            if not fid.test_stats_exists(stats_name, mode="clean", metric="FID"):
+                fid.make_custom_stats(
+                    stats_name,
+                    args.eval_refdir,
+                    mode="clean",
+                    num_workers=args.num_workers,
+                    device=device_str,
+                    verbose=True,
+                    batch_size=args.fid_batch_size,
+                )
+
+
+            # copy the cached .npz into datadir
+            cache_dir = os.path.join(os.path.dirname(cleanfid.__file__), "stats")
+            assert fid.test_stats_exists(stats_name, mode="clean", metric="FID")
+            # equivalet to
+            source = os.path.join(cache_dir, f"{stats_name}_clean_custom_na.npz")
+            assert os.path.exists(source), f"CleanFID built stats but not found at : {source}"
+            shutil.copy2(source, real_stats_path)
+            logger.info(f"[real_stats] copied -> {real_stats_path}")
+        logger.info(f"Real_stats available at : {real_stats_path}")
     
+    dist.barrier()
+
 
     # create model
     assert args.image_size % 8 == 0, f"Image size must be divisible by 8 (for the VAE encoder)"
@@ -132,7 +178,8 @@ def main(args):
     model = create_model(args) # Models[args.model](args)
 
     # will this work on multi gpu single node ?
-    model = model.to(device)
+    model = DDP(model.to(device), device_ids=[rank], broadcast_buffers=False, find_unused_parameters=False)
+
     model.eval()
 
     flow = create_transport(
@@ -153,9 +200,10 @@ def main(args):
     flow_sampler = Sampler(flow)
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
 
-    logger.info(f"Model : {args.model}, parameter count : {sum(p.numel() for p in model.parameters()):,}")
-
-    ref_dir = args.eval_refdir
+    if rank == 0:
+        logger.info(f"Model : {args.model}, parameter count : {sum(p.numel() for p in model.parameters()):,}")
+    
+    
     eval_bs = args.eval_bs
     eval_nsamples = args.eval_nsamples
     latent_res = args.image_size // 8
@@ -173,46 +221,43 @@ def main(args):
         model.module.load_state_dict(ckpt[args.model_type], strict=True)
         del ckpt
         torch.cuda.synchronize()
-        logger.info(f"Checkpoint {step} loaded successfully")
+        if rank == 0:
+            logger.info(f"{args.model_type} Checkpoint {step} loaded successfully")
 
 
-
-
-        # maybe try to eval real stats just once that would save time?
-        assert os.path.exists(ref_dir)
         global_batch_size = eval_bs * world_size
         total_samples = int (math.ceil(eval_nsamples / global_batch_size) * global_batch_size)
         samples_needed_this_gpu = int(total_samples // world_size)
         iterations = int (samples_needed_this_gpu // eval_bs)
-        eval_pbar = tqdm(range(iterations, disable=(rank != 0)))
+        eval_pbar = tqdm(range(iterations), disable=(rank != 0))
         total = 0
-        p = Path(eval_dir) / f"fid{eval_nsamples}_step{step}"
+        generated_samples_path = Path(eval_dir) / f"fid{eval_nsamples}_step{step}"
     
         dist.barrier()
         if rank == 0:
-            if p.exists():
-                shutil.rmtree(p.as_posix())
-            p.mkdir(exist_ok=True, parents=True)
+            if generated_samples_path.exists():
+                shutil.rmtree(generated_samples_path.as_posix())
+            generated_samples_path.mkdir(exist_ok=True, parents=True)
         dist.barrier()
     
         for _ in eval_pbar:
             # x0
             z = torch.randn(eval_bs, 4, latent_res, latent_res, device=device)
             if use_label:
-                y = torch.randint(num_classes-1, size=(eval_bs), dtype=torch.long, device=device) # sample [,) num classes = 2 sample 0 and 1 0 is null class
+                y = torch.randint(num_classes-1, size=(eval_bs, ), dtype=torch.long, device=device) # sample [,) num classes = 2 sample 0 and 1 1 is null class
                 if use_cfg:
                     z = torch.cat([z, z], dim=0)
                     y_null = torch.tensor([num_classes - 1] * eval_bs, dtype=torch.long, device=device)
                     y = torch.cat([y, y_null], dim=0)
                     sample_model_kwargs = dict(y=y, cfg_scale=cfg_scale)
-                    model_fn = model.forward_with_cfg
+                    model_fn = model.module.forward_with_cfg
                 else:
                     sample_model_kwargs = dict(y=y) #no cfg scale
-                    model_fn = model.forward
+                    model_fn = model.module.forward
             else:
                 y = None
                 sample_model_kwargs = dict(y=y)
-                model_fn = model.forward
+                model_fn = model.module.forward
             
             # inference
             with torch.no_grad():
@@ -221,28 +266,49 @@ def main(args):
             
             if use_cfg:
                 samples, null_samples = samples.chunk(2, dim=0) # discarrd null samples
+                del null_samples
             
-            del null_samples, z, y
+            del z, y
             samples = vae.decode(samples / 0.18215).sample
             samples = (
-                torch.clamp(127.5 * samples + 128.0, 0, 255)
-                .permute(0, 2, 3, 1)
-                .to("cpu", dtype=torch.uint8)
-                .numpy()
+                ((samples.clamp(-1, 1) + 1) / 2 * 255)
+                .round().to(torch.uint8)
+                .permute(0, 2, 3, 1).contiguous()
+                .cpu().numpy()
             )
 
+            samples_per_iter = samples.shape[0]
             for i, sample in enumerate(samples):
                 index = i * world_size + rank + total
                 if index >= eval_nsamples:
                     break
-                image_path = p / f"{index:06d}.png"
-                Image.fromarray(sample).save(image_path.as_posix())
-            total += global_batch_size
+                image_path = generated_samples_path / f"{index:06d}.png"
+                Image.fromarray(sample, mode="RGB").save(image_path.as_posix())
+            total += samples_per_iter * world_size
             del samples
+        torch.cuda.synchronize()
         torch.cuda.empty_cache()
         gc.collect()
 
-     
+        # calculate stats for generated images for this particular checkpoint
+        if rank == 0:
+            logger.info (f"Calculating FID{args.eval_nsamples} for {args.model_type} checkpoint_{step}.....")
+            assert fid.test_stats_exists(stats_name, mode="clean", metric="FID"), f"specified real stats : {stats_name} are invalid"
+            score = fid.compute_fid(
+                generated_samples_path.as_posix(),
+                dataset_name=stats_name,            # the REAL stats name you built earlier
+                dataset_split="custom",
+                dataset_res=args.image_size,
+                mode="clean",
+                num_workers=args.num_workers,
+                device=device_str,
+                verbose=True,
+                batch_size=args.fid_batch_size,
+            )
+            wandb.log({"FID10k" : score}, step=step, commit=True)
+            logger.info(f"FID10k:{score}")
+        dist.barrier()
+
 
     cleanup()
     
@@ -259,8 +325,9 @@ if __name__ == "__main__":
     # Default args here will train the model with the hyperparameters we used in our paper (except training iters).
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", required=True, help="name of dataset")
+    parser.add_argument("--datadir", required=True, help="Path to dataset")
     parser.add_argument("--exp", type=str, required=True, help="runs fid eval on all checkpoints from this experiment")
-    parser.add_argument("--results-dir", type=str, default="eval_results")
+    parser.add_argument("--eval-results-dir", type=str, default="eval_results")
 
     parser.add_argument("--model-type", type=str, required=True, choices=["base", "ema"])
 
@@ -305,11 +372,11 @@ if __name__ == "__main__":
 
     # EVAL
     group = parser.add_argument_group("Eval")
-    group.add_argument("--eval-metric", type=str, required=True)
+    group.add_argument("--eval-refdir", type=str, required=True)
+    group.add_argument("--eval-metric", type=str, required=True, choices=["FID", "KID"])
     group.add_argument("--eval-nsamples", type=int, default=10000)
     group.add_argument("--eval-bs", type=int, default=4) # NOTE: eval batch size for fid calc (per GPU)
-    group.add_argument("--eval-every", type=int, default=9999)
-    group.add_argument("--eval-refdir", type=str, default=None)
+    group.add_argument("--fid-batch-size", type=int, default=32) # NOTE: batch size for fid calc through the feature extractor inceptionV3 model
     
 
     # Flow Matching 

@@ -1,3 +1,13 @@
+### Running Eval
+- git pull origin debug
+- pip install clean-fid (wasnt there in req.txt before added it now)
+- cd eval_scripts
+- edit CUDA_VISIBLE_DEVICES in rc1_eval.sh, adjust batch sizes (no experience with inception v3 feature extraction model before so not sure what will work)
+- bash rc1_eval.sh
+- post error log if any
+- the script is supposed to fetch all the checkpoitns for an experiment and run EMA FID10k eval and post it onto wandb across all checkpoint steps
+
+
 ### Starting experiments
 - git pull origin debug
 - cd data_prep/celeba256

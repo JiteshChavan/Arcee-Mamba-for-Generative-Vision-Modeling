@@ -4,11 +4,11 @@ export CUDA_VISIBLE_DEVICES=0
 
 EXP="eval_dummy"
 NUM_GPUS=1
-EVAL_BS=96
+EVAL_BS=8
 
-torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/eval_fid.py --exp $EXP --dataset celeba_256 --eval-refdir ../data_prep/celeba256/real_samples \
+torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/eval_fid.py --exp $EXP --dataset celeba_256 --datadir ../data/celeba256/ --eval-refdir ../data/celeba256/real_samples \
   --model-type ema \
-  --eval-metric fid-10k\
+  --eval-metric FID\
   --image-size 256 \
   --num-classes 1 \
   --block-type normal \
@@ -18,9 +18,9 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/eval_fid.py --exp $EXP
   --eval-bs $EVAL_BS \
   --learnable-pe \
   --path-type GVP \
-  --eval-nsamples 10000 \
+  --eval-nsamples 40 \
   --rms-norm \
   --fused-add-norm \
   --drop-path 0.0 \
   #--use-wandb \
-  #--resume \
+  

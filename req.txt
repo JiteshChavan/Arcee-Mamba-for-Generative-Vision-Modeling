@@ -169,3 +169,6 @@ yacs
 yapf
 yarl
 zipp
+clean-fid
+pytest
+wandb
