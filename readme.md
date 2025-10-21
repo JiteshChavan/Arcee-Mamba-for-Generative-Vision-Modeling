@@ -1,3 +1,8 @@
+### TODO:
+1. download FFHQ: cd data_prep/ffhq1024 -> python download.py (you will see 70k~ images in real_samples folder after done) -> python convert.py (there should be train.lmdb in same directory after)
+2. resume zigma8 online node (it has crashed): cd scripts -> bash Zigma8-b2-celeba256.sh (thats it)
+3. run eval for zigma 4 (online node) : cd eval_scripts -> bash z8_eval.sh
+
 ### Running Eval
 - git pull origin debug
 - pip install clean-fid (wasnt there in req.txt before added it now)
