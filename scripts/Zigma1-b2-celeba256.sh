@@ -1,5 +1,4 @@
 export WANDB_API_KEY='2f92f218fe46708930c460c6f57055ac6ce1361c'
-export CUDA_VISIBLE_DEVICES=2,3
 
 
 # REMEMBER TO EXPORT RUNID FROM wandb url to resume
@@ -37,5 +36,4 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --fused-add-norm \
   --drop-path 0.0 \
   --save-content-every 5000 \
-  --use-wandb "offline"\
   #--resume \
