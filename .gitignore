@@ -5,3 +5,5 @@ scripts/wandb/
 scripts/results/
 **/*.so
 
+data_prep/ffhq1024/_ffhq_hf/*.tar
+data_prep/celeba256/.hf/
