@@ -4,6 +4,9 @@ export WANDB_API_KEY='2f92f218fe46708930c460c6f57055ac6ce1361c'
 #export WANDB_RESUME="must"
 EXP="Arcee8-B-2-celeba256"
 
+export WANDB_RUN_ID="jbebiziw"
+export WANDB_RESUME="must"
+
 
 NUM_GPUS=2
 BATCH_SIZE=96
@@ -18,7 +21,7 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --model Arcee-B/2 \
   --scan-type Arcee_8 \
   --ssm-dstate 256 \
-  --train-steps 50050 \
+  --train-steps 60050 \
   --eval-every 5000 \
   --plot-every 500 \
   --ckpt-every 10000 \
@@ -35,4 +38,4 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --drop-path 0.0 \
   --save-content-every 10000 \
   --use-wandb "online"\
-  #--resume \
+  --resume \

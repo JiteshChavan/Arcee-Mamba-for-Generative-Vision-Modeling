@@ -20,7 +20,7 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --model Zigma-B/2 \
   --scan-type Zigma_8 \
   --ssm-dstate 256 \
-  --train-steps 50050 \
+  --train-steps 60050 \
   --eval-every 5000 \
   --plot-every 500 \
   --ckpt-every 10000 \
