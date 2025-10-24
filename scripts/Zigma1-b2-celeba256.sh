@@ -2,9 +2,11 @@ export WANDB_API_KEY='2f92f218fe46708930c460c6f57055ac6ce1361c'
 
 
 # REMEMBER TO EXPORT RUNID FROM wandb url to resume
-#export WANDB_RUN_ID="PASTE_ID_HERE"
+#export WANDB_RUN_ID="ikoevwe0"
 #export WANDB_RESUME="must"
 EXP="Zigma-1-B-2-256-celeba256"
+export WANDB_RUN_ID="ikoevwe0"
+export WANDB_RESUME="must"
 
 
 NUM_GPUS=2
@@ -36,4 +38,4 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --fused-add-norm \
   --drop-path 0.0 \
   --save-content-every 5000 \
-  #--resume \
+  --resume \
