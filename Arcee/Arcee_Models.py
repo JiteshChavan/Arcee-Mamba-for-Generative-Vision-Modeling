@@ -462,8 +462,8 @@ def create_block(
     """
     Creates a block with specified mixer every even layer, and MoE ffn every odd layer
     """
-    assert ssm_cfg in ["Arcee", "Zigma", "NotArcee"]
-    assert scan_type in ["arcee_1", "zigma_1", "arcee_2", "zigma_2", "arcee_4", "zigma_4", "arcee_8", "zigma_8"]
+    assert ssm_cfg in ["Arcee", "Zigma", "vision_mamba", "NotArcee"]
+    assert scan_type in ["v2", "arcee_1", "zigma_1", "arcee_2", "zigma_2", "arcee_4", "zigma_4", "arcee_8", "zigma_8"]
     factory_kwargs = {"device": device, "dtype": dtype}
     norm_cls = partial (nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_eps, **factory_kwargs)
     
@@ -474,11 +474,13 @@ def create_block(
                 d_state=ssm_dstate,
                 layer_idx=layer_idx,
                 lock_permutations=lock_permutations,
+                scan_type=scan_type,
                 **block_kwargs,
                 **factory_kwargs,
             )
         else:
-            mixer_cls = partial (Mamba, d_state=ssm_dstate, layer_idx=layer_idx, **block_kwargs, **factory_kwargs) # block_kwargs contain scan_type
+            assert ssm_cfg in ["Zigma", "vision_mamba"]
+            mixer_cls = partial (Mamba, d_state=ssm_dstate, layer_idx=layer_idx, scan_type=scan_type, **block_kwargs, **factory_kwargs) # block_kwargs contain scan_type
 
         assert block_type == "normal"
         block = Block(
@@ -616,7 +618,6 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
             block_kwargs = {}
             block_kwargs["zigzag_paths"] = zz_paths
             block_kwargs["zigzag_paths_reverse"] = zz_paths_rev
-            block_kwargs["scan_type"] = scan_type
             return block_kwargs
         
         self.lock_permutations = False
@@ -634,12 +635,15 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                 assert self.locked_permutation_path_r.shape[0] == 1
                 assert self.locked_permutation_path_r.shape[1] == int (grid_size * grid_size)
         else:
+            assert self.scan_type == "v2"
             block_kwargs = {}
 
         if block_kwargs:
             print (f"Forward permutation count : {block_kwargs['zigzag_paths'].shape[0]}")
             print (f"Reverse permutation count : {block_kwargs['zigzag_paths_reverse'].shape[0]}")
         print(f"\n\tRegistered scan_type {scan_type}")
+        if block_kwargs == {}:
+            print(f"\t No permutation buffers registered.")
         print (f"\tPermutations locked:{self.lock_permutations}")
         
         
@@ -784,6 +788,8 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
             raise("Unsupported PE")
         
 
+        
+        # NOTE: Default signal from PatchEmbed is row major, only touch the order for arcee1, to avoid rearranging multiple times in same order
         if self.lock_permutations:
             # assert that len(zzpaths)==1 and permute once
             # TODO: Remove redundant asserts
@@ -791,11 +797,9 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
             _perm = self.locked_permutation_path[0]
             x = torch.gather(x, 1, _perm[None, :, None].expand_as(x)) # x (B, T, C)
 
-        # freq_residual = None
+        # NOTE: vision mamba processes signal in row major permutation
         
         residual = None
-        debug_h0 = None
-        #beta = 0.7
         assert initial_state is None
         for idx, block in enumerate(self.blocks):
             x, residual, last_state = block (x, residual, initial_state=initial_state, return_last_state=True if self.ssm_cfg == "Arcee" else False, y=c)
@@ -811,15 +815,6 @@ class Arcee(nn.Module, PyTorchModelHubMixin):
                 #initial_state = initial_state + beta * (last_state - initial_state)
                 #initial_state = initial_state + last_state
                 initial_state = last_state
-            
-            # NOTE: not logging activations, slows down training
-            #if initial_state is not None and self.ssm_cfg == "Arcee":
-            #    try:
-            #        if wandb.run is not None and initial_state is not None:
-            #            # only log some layers (e.g., 0 and last)
-            #            wandb.log({f"last_state_norm/l{idx}": initial_state.detach().norm().item()}, commit=False)
-            #    except Exception:
-            #        raise NotImplementedError(f"cant log last_state norm after block pass")
                     
 
 
@@ -1027,6 +1022,17 @@ def Zigma_XS_1(**kwargs):
         **kwargs, 
     )
 
+
+def Vim_B_2(**kwargs):
+    return Arcee(
+        depth=20,
+        hidden_size=768,
+        patch_size=2,
+        initializer_cfg=None,
+        ssm_cfg="vision_mamba",
+        **kwargs,
+    )
+
 def Arcee_B_2(**kwargs):
     return Arcee (
         depth = 24,
@@ -1153,6 +1159,7 @@ def Zigma_L_2(**kwargs):
 
 
 
+
 Models = {
     "Arcee-XS/2" : Arcee_XS_2,
     "Arcee-XS/1" : Arcee_XS_1,
@@ -1172,4 +1179,7 @@ Models = {
     "Zigma-XB/1" : Zigma_XB_1,
     "Zigma-L/2"  : Zigma_L_2,
     "Zigma-L/1"  : Zigma_L_1,
+
+    # Vision Mamba models
+    "Vim-B/2" : Vim_B_2,
 }

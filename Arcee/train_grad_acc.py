@@ -1,5 +1,5 @@
-use_ema_for_eval = False
-use_ema_for_samples = False
+use_ema_for_eval = True
+use_ema_for_samples = True
 # utils
 import shutil
 import random
@@ -398,7 +398,7 @@ def main(args):
 
     effective_batch_size = args.global_batch_size # thats per single grad accum step
     grad_accum_steps = args.grad_accum_steps
-    for current_step in range(init_step, total_steps):
+    for current_step in range(init_step, total_steps+1):
         opt.zero_grad(set_to_none=True)
 
         micro_step_loss_accum = 0.0
@@ -697,7 +697,7 @@ if __name__ == "__main__":
         "--scan-type",
         type=str,
         default="none",
-        choices=["none", "Arcee_1", "Arcee_2", "Arcee_4", "Arcee_8", "Zigma_1", "Zigma_2", "Zigma_4", "Zigma_8"],
+        choices=["none", "Arcee_1", "Arcee_2", "Arcee_4", "Arcee_8", "Zigma_1", "Zigma_2", "Zigma_4", "Zigma_8", "V2"],
     )
     parser.add_argument("--block-type", type=str, default="normal", choices=["normal", "combined"])
 

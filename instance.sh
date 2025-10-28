@@ -1,11 +1,14 @@
+SCAN_TYPE="Zigma_2"
+MODEL="Zigma-B/2"
+
 python Arcee/instance.py \
     --exp instantiation \
     --datadir . \
       --image-size 256 \
   --num-classes 1 \
   --block-type normal \
-  --model Arcee-B/2 \
-  --scan-type Arcee_8 \
+  --model $MODEL \
+  --scan-type $SCAN_TYPE\
   --ssm-dstate 256 \
   --global-batch-size 8 \
   --learnable-pe \
