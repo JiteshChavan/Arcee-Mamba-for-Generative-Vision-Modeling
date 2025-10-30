@@ -1,10 +1,10 @@
 
 ### Vision Mamba Baseline runs on L40:
 - git pull origin debug
-- make sure tests are running from repo root bash run_test.sh
 - cd L40runs
-- run experiment on 4xL40s to match scale as .> bash vision_mamba_baseline.sh
-- if out of memory error .> run bash vision_mamba_grad_acc.sh
+- [] resume yesterday's experiment as bash vision_mamba_grad_acc.sh
+- [] start the new run as bash arcee_vision_mamba_grad_acc.sh
+
 
 ### Running Eval
 - git pull origin debug
