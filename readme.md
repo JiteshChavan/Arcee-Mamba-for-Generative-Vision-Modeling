@@ -2,6 +2,7 @@
 ### Vision Mamba Baseline runs on L40:
 - git pull origin debug
 - cd L40Eval
+- pip install clean-fid
 - run eval for old run on same filesystem/machine as : bash vision_mamba_baseline.sh
 
 
