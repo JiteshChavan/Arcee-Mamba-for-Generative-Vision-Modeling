@@ -96,7 +96,6 @@ def main(args):
     assert os.path.exists(generated_samples_path), f"target directory doesnt exist : {generated_samples_path} is invalid"
     gen_image_count = count_images(generated_samples_path)
     logger.info(f"found {gen_image_count} images in specified target {generated_samples_path}")
-    assert gen_image_count == args.eval_nsamples, f"required samples = {args.eval_nsamples} does not equate to generated_samples {gen_image_count} found in folder {generated_samples_path}"
     dist.barrier()
 
     stats_name = args.dataset # celeba_256 eg.

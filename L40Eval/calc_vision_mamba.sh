@@ -5,7 +5,6 @@ export CUDA_VISIBLE_DEVICES=0
 
 NUM_GPUS=1
 
-
 FID_BS=128 # for inceptionV3 feature extraction model forward pass, can be much higher than backbone
 EVAL_SAMPLES=50000
 
