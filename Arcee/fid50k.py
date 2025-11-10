@@ -235,25 +235,34 @@ def main(args):
                 logger.info(f"{args.model_type} Checkpoint {step} loaded successfully")
     
     
-            global_batch_size = eval_bs * world_size
-            total_samples = int (math.ceil(eval_nsamples / global_batch_size) * global_batch_size)
-            samples_needed_this_gpu = int(total_samples // world_size)
-            iterations = int (samples_needed_this_gpu // eval_bs)
-            eval_pbar = tqdm(range(iterations), disable=(rank != 0))
-            total = 0
-        
+            
+            # delta-generation: append only missing images 
             dist.barrier()
             if rank == 0:
-                if generated_samples_path.exists():
-                    shutil.rmtree(generated_samples_path.as_posix())
-                generated_samples_path.mkdir(exist_ok=True, parents=True)
-            dist.barrier()
-        
-            for _ in eval_pbar:
-                # x0
+                generated_samples_path.mkdir(parents=True, exist_ok=True)
+                files = list(generated_samples_path.glob("*.png"))
+                if files:
+                    # filenames like 000123.png -> take max numeric stem
+                    _existing = max(int(p.stem) for p in files) + 1
+                else:
+                    _existing = 0
+            _existing = torch.tensor([_existing], device=device)
+            dist.broadcast(_existing, src=0)
+            existing = int(_existing.item())
+            remaining = max(0, eval_nsamples - existing)
+
+            if remaining == 0:
+                if rank == 0:
+                    logger.info(f"{generated_samples_path} already has {existing} images (>= {eval_nsamples}); skipping generation.")
+            else:
+                global_iterations = math.ceil(remaining / (eval_bs * world_size))
+                eval_pbar = tqdm(range(global_iterations), disable=(rank != 0))
+
+            for k in (eval_pbar if remaining > 0 else []):
+                # --- sample latents + labels, then run model exactly as you do now ---
                 z = torch.randn(eval_bs, 4, latent_res, latent_res, device=device)
                 if use_label:
-                    y = torch.randint(num_classes-1, size=(eval_bs, ), dtype=torch.long, device=device) # sample [,) num classes = 2 sample 0 and 1 1 is null class
+                    y = torch.randint(0, num_classes - 1, size=(eval_bs,), dtype=torch.long, device=device)
                     if use_cfg:
                         z = torch.cat([z, z], dim=0)
                         y_null = torch.tensor([num_classes - 1] * eval_bs, dtype=torch.long, device=device)
@@ -261,23 +270,21 @@ def main(args):
                         sample_model_kwargs = dict(y=y, cfg_scale=cfg_scale)
                         model_fn = model.module.forward_with_cfg
                     else:
-                        sample_model_kwargs = dict(y=y) #no cfg scale
+                        sample_model_kwargs = dict(y=y)
                         model_fn = model.module.forward
                 else:
                     y = None
                     sample_model_kwargs = dict(y=y)
                     model_fn = model.module.forward
-                
-                # inference
+
                 with torch.no_grad():
-                    sample_fn = flow_sampler.sample_ode() # vectorfield ODE sampling (continuity equation)
+                    sample_fn = flow_sampler.sample_ode()
                     samples = sample_fn(z, model_fn, **sample_model_kwargs)[-1]
-                
+
                 if use_cfg:
-                    samples, null_samples = samples.chunk(2, dim=0) # discarrd null samples
-                    del null_samples
-                
-                del z, y
+                    samples, _ = samples.chunk(2, dim=0)  # keep only cond half
+
+                # decode to uint8 NHWC
                 samples = vae.decode(samples / 0.18215).sample
                 samples = (
                     ((samples.clamp(-1, 1) + 1) / 2 * 255)
@@ -285,16 +292,21 @@ def main(args):
                     .permute(0, 2, 3, 1).contiguous()
                     .cpu().numpy()
                 )
-    
-                samples_per_iter = samples.shape[0]
+
+                
+                base = existing + k * (eval_bs * world_size)
+                start = base + rank * eval_bs
+
                 for i, sample in enumerate(samples):
-                    index = i * world_size + rank + total
-                    if index >= eval_nsamples:
+                    gidx = start + i
+                    if gidx >= eval_nsamples:
                         break
-                    image_path = generated_samples_path / f"{index:06d}.png"
+                    image_path = generated_samples_path / f"{gidx:06d}.png"
                     Image.fromarray(sample, mode="RGB").save(image_path.as_posix())
-                total += samples_per_iter * world_size
-                del samples
+
+                del z, y, samples
+
+
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
             gc.collect()
