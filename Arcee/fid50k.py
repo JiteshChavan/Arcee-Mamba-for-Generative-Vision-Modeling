@@ -236,19 +236,16 @@ def main(args):
     
     
             
-            # delta-generation: append only missing images 
+            # delta-generation: append only missing images
             dist.barrier()
+            buf = torch.zeros(1, dtype=torch.long, device=device)
             if rank == 0:
                 generated_samples_path.mkdir(parents=True, exist_ok=True)
                 files = list(generated_samples_path.glob("*.png"))
-                if files:
-                    # filenames like 000123.png -> take max numeric stem
-                    _existing = max(int(p.stem) for p in files) + 1
-                else:
-                    _existing = 0
-            _existing = torch.tensor([_existing], device=device)
-            dist.broadcast(_existing, src=0)
-            existing = int(_existing.item())
+                existing_val = max(int(p.stem) for p in files) + 1 if files else 0
+                buf[0] = existing_val
+            dist.broadcast(buf, src=0)
+            existing = int(buf.item())
             remaining = max(0, eval_nsamples - existing)
 
             if remaining == 0:
