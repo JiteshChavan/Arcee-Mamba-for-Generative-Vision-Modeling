@@ -16,7 +16,7 @@ def create_model(config):
         routing_mode = config.routing_mode,
         is_moe = config.is_moe,
         pe_type = config.pe_type,
-        block_type = config.block_type, # Combined RC block
+        block_type = config.block_type,
         learnable_pe = config.learnable_pe,
         drop_path = config.drop_path, # dropout feed forward
         use_final_norm = config.use_final_norm,

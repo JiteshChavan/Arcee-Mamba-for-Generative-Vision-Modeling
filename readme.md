@@ -25,8 +25,12 @@ In our paper, plugging Arcee into a single-scan Zigzag Mamba Flow Matching model
 ## Model specs and results (CelebA-HQ 256×256)
 Note that Arcee **does not** incur additional parameter overhead.
 ![specs](assets/specs.png)
-![main_results](assets/main_results.png)
-![trainloss](assets/rc1vsz1loss.png)
+| (a) Main quantitative results | (b) Training loss (Zigma-1 vs Zigma-1 + Arcee) |
+| ----------------------------- | ---------------------------------------------- |
+| ![Main results](assets/main_results.png) | ![Training loss](assets/rc1vsz1loss.png) |
+
+**Figure:** (a) Main quantitative results on CelebA-HQ 256×256 (Flow Matching, 50 NFEs, 50k-step checkpoint).  
+(b) Training loss curves for the Zigma-1 baseline and Zigma-1 + Arcee at scan-order 1; other scan orders show similar loss behavior and are omitted for brevity.
 
 
 ## Environment Setup
@@ -75,6 +79,11 @@ All commands in this README assume:
 If you mix different major/minor CUDA versions (e.g. PyTorch cu128 but toolkit 11.x), the extensions may fail to compile or crash at runtime.
 
 Installing mamba might be problematic, refer [here](https://github.com/state-spaces/mamba/issues) for guidance.
+
+## Usage:
+A forward and backward pass over the DNN can be set up as follows
+(note: the relative imports only work if this script lives inside the `./Arcee` directory):
+![usage](/assets/usage.png)
 
 
 ## Citation

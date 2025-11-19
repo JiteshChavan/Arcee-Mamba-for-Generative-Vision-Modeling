@@ -1177,7 +1177,15 @@ def Zigma_L_2(**kwargs):
     )
 
 
-
+def Arcee_Tiny_2(**kwargs):
+    return Arcee(
+        depth = 8,
+        hidden_size = 128,
+        patch_size = 2,
+        initializer_cfg = None,
+        ssm_cfg = "Arcee",
+        **kwargs,
+    )
 
 Models = {
     "Arcee-XS/2" : Arcee_XS_2,
@@ -1202,4 +1210,7 @@ Models = {
     # Vision Mamba models
     "Vim-B/2" : Vim_B_2,
     "ArceeVim-B/2" : ArceeVim_B_2,
+
+    # tiny
+    "Arcee-Tiny/2" : Arcee_Tiny_2,
 }
