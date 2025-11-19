@@ -33,7 +33,7 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP  -
   --drop-path 0.0 \
   --save-content-every 5000 \
   --eval-every 500000000 \
-  --use-wandb "offline"\                     
+  --use-wandb "offline"                  
   #--resume \
 
   

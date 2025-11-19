@@ -44,7 +44,7 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train_grad_acc.py --ex
   --drop-path 0.0 \
   --save-content-every 5000 \
   --eval-every 1000000000 \
-  --use-wandb $WANDB\
-  --resume
+  --use-wandb $WANDB
+  #--resume
 
   

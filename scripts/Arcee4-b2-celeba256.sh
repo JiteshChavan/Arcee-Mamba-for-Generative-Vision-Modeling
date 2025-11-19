@@ -35,5 +35,5 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --
   --fused-add-norm \
   --drop-path 0.0 \
   --save-content-every 10000 \
-  --use-wandb "online"\
+  --use-wandb "online"
   #--resume \

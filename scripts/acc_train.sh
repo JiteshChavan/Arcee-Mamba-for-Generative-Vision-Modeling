@@ -54,5 +54,5 @@ torchrun --standalone --nproc_per_node=1 ../Arcee/train_grad_acc.py --exp $EXP -
   --drop-path 0.0 \
   --save-content-every 500 \
   --grad-accum-steps $GRAD_ACCUM_STEPS \
-  --use-wandb \
+  --use-wandb
   #--resume \

@@ -24,6 +24,6 @@ torchrun --standalone --nproc_per_node=$NUM_GPUS ../Arcee/eval_fid.py --exp ../s
   --path-type GVP \
   --rms-norm \
   --fused-add-norm \
-  --drop-path 0.0 \
+  --drop-path 0.0
   #--use-wandb
   

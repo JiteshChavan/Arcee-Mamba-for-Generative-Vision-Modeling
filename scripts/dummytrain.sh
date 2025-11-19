@@ -36,6 +36,6 @@ torchrun --nnodes=1 --nproc_per_node=$NUM_GPUS ../Arcee/train.py --exp $EXP --da
   --fused-add-norm \
   --drop-path 0.0 \
   --save-content-every 5 \
-  --use-wandb $WANDB\
+  --use-wandb $WANDB
   #--resume \
   # REMEMBER TO EXPORT RUNID FROM wandb url to resume
