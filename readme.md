@@ -27,7 +27,7 @@ Note that Arcee **does not** incur additional parameter overhead.
 ![specs](assets/specs.png)
 | (a) Main quantitative results | (b) Training loss (Zigma-1 vs Zigma-1 + Arcee) |
 | ----------------------------- | ---------------------------------------------- |
-| ![Main results](assets/main_results.png) | ![Training loss](assets/rc1vsz1loss.png) |
+| ![Main results](assets/main_results.png) | ![Training loss](assets/losstrend.png) |
 
 **Figure:** (a) Main quantitative results on CelebA-HQ 256×256 (Flow Matching, 50 NFEs, 50k-step checkpoint).  
 (b) Training loss curves for the Zigma-1 baseline and Zigma-1 + Arcee at scan-order 1; other scan orders show similar loss behavior and are omitted for brevity.
